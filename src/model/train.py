@@ -1,74 +1,67 @@
 # Import libraries
 
-import argparse
-import glob
-import os
-
+from sklearn.datasets import load_diabetes
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 import pandas as pd
-
-from sklearn.linear_model import LogisticRegression
-
-
-# define functions
-def main(args):
-    # TO DO: enable autologging
+import joblib
 
 
-    # read data
-    df = get_csvs_df(args.training_data)
+# Split the dataframe into test and train data
+def split_data(df):
+    X = df.drop('Y', axis=1).values
+    y = df['Y'].values
 
-    # split data
-    X_train, X_test, y_train, y_test = split_data(df)
-
-    # train model
-    train_model(args.reg_rate, X_train, X_test, y_train, y_test)
-
-
-def get_csvs_df(path):
-    if not os.path.exists(path):
-        raise RuntimeError(f"Cannot use non-existent path provided: {path}")
-    csv_files = glob.glob(f"{path}/*.csv")
-    if not csv_files:
-        raise RuntimeError(f"No CSV files found in provided data path: {path}")
-    return pd.concat((pd.read_csv(f) for f in csv_files), sort=False)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=0)
+    data = {"train": {"X": X_train, "y": y_train},
+            "test": {"X": X_test, "y": y_test}}
+    return data
 
 
-# TO DO: add function to split data
+# Train the model, return the model
+def train_model(data, args):
+    reg_model = Ridge(**args)
+    reg_model.fit(data["train"]["X"], data["train"]["y"])
+    return reg_model
 
 
-def train_model(reg_rate, X_train, X_test, y_train, y_test):
-    # train model
-    LogisticRegression(C=1/reg_rate, solver="liblinear").fit(X_train, y_train)
+# Evaluate the metrics for the model
+def get_model_metrics(reg_model, data):
+    preds = reg_model.predict(data["test"]["X"])
+    mse = mean_squared_error(preds, data["test"]["y"])
+    metrics = {"mse": mse}
+    return metrics
 
 
-def parse_args():
-    # setup arg parser
-    parser = argparse.ArgumentParser()
+def main():
+    # Load Data
+    sample_data = load_diabetes()
 
-    # add arguments
-    parser.add_argument("--training_data", dest='training_data',
-                        type=str)
-    parser.add_argument("--reg_rate", dest='reg_rate',
-                        type=float, default=0.01)
+    df = pd.DataFrame(
+        data=sample_data.data,
+        columns=sample_data.feature_names)
+    df['Y'] = sample_data.target
 
-    # parse args
-    args = parser.parse_args()
+    # Split Data into Training and Validation Sets
+    data = split_data(df)
 
-    # return args
-    return args
+    # Train Model on Training Set
+    args = {
+        "alpha": 0.5
+    }
+    reg = train_model(data, args)
 
-# run script
-if __name__ == "__main__":
-    # add space in logs
-    print("\n\n")
-    print("*" * 60)
+    # Validate Model on Validation Set
+    metrics = get_model_metrics(reg, data)
 
-    # parse args
-    args = parse_args()
+    # Save Model
+    model_name = "sklearn_regression_model.pkl"
 
-    # run main function
-    main(args)
+    joblib.dump(value=reg, filename=model_name)
 
+main()
     # add space in logs
     print("*" * 60)
     print("\n\n")
